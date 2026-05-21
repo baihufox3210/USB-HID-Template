@@ -1,56 +1,101 @@
 #include <Arduino.h>
+
 #include <FastLED.h>
+
 #include <USB.h>
 #include <USBHIDGamepad.h>
 
-#define LED_PIN 48
-#define LED_NUMS 1
+#include <BleGamepad.h>
 
-USBHIDGamepad GamePad;
-CRGB leds[LED_NUMS];
+#define LED_PIN 48
+#define NUM_LEDS 1
+
+enum Mode {MODE_USB, MODE_BLE};
+Mode currentMode = MODE_BLE;
+
+USBHIDGamepad usbGamepad;
+
+BleGamepad bleGamepad("ESP32 BLE Gamepad", "Espressif", 100);
+
+CRGB leds[NUM_LEDS];
 
 struct Button {
-    int pin, hid;
-    bool lastState;
+	int pin, hid;
+	bool lastState;
 };
 
-Button buttons[] = {};
+Button buttons[] = {
+	{4, 1, HIGH}
+};
+
+void setButtonEvent(int buttonID, bool isPressed) {
+	if(currentMode == MODE_USB) {
+		if(isPressed) usbGamepad.pressButton(buttonID);
+		else usbGamepad.releaseButton(buttonID);
+	}
+	else {
+		if(isPressed) bleGamepad.press(buttonID);
+		else bleGamepad.release(buttonID);
+	}
+}
 
 void setup() {
-    Serial.begin(115200);
+	Serial.begin(115200);
 
-    for(Button& button : buttons) {
-        pinMode(button.pin, INPUT_PULLUP);
-    }
+	for(Button& button : buttons) {
+		pinMode(button.pin, INPUT_PULLUP);
+		button.lastState = digitalRead(button.pin);
+	}
 
-    FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, LED_NUMS);
-    FastLED.setBrightness(50);
+	FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
+	FastLED.setBrightness(50);
 
-    leds[0] = CRGB::Blue;
-    FastLED.show();
+	leds[0] = CRGB::Red;
+	FastLED.show();
 
-    USB.begin();
-    GamePad.begin();
+	if(currentMode == MODE_USB) {
+		USB.begin();
+		usbGamepad.begin();
+
+		leds[0] = CRGB::Green;
+		FastLED.show();
+	}
+	else {
+		bleGamepad.begin();
+
+		leds[0] = CRGB::Blue;
+		FastLED.show();
+	}
 }
 
 void loop() {
-    for(Button& button : buttons) {
-        bool currentState = digitalRead(button.pin);
+	if(currentMode == MODE_BLE) {
+		if(!bleGamepad.isConnected()) {
+			static unsigned long lastFlash = 0;
+			static bool flashState = false;
 
-        if (currentState != button.lastState) {
-            if (currentState == LOW) {
-                GamePad.pressButton(button.hid);
-                leds[0] = CRGB::Green;
-            } 
-            else {
-                GamePad.releaseButton(button.hid);
-                leds[0] = CRGB::Red;
-            }
+			if(millis() - lastFlash > 500) {
+				flashState = !flashState;
+				leds[0] = flashState ? CRGB::Blue : CRGB::Black;
+				
+				FastLED.show();
+				lastFlash = millis();
+			}
+		}
+		else {
+			leds[0] = CRGB::Blue;
+			FastLED.show();
+		}
+	}
 
-            FastLED.show();
-            button.lastState = currentState;
-        }
-    }
+	for(Button& button : buttons) {
+		bool currentState = digitalRead(button.pin);
 
-    delay(10); 
+		if(currentState != button.lastState) {
+			setButtonEvent(button.hid, currentState == LOW);
+			button.lastState = currentState;
+		}
+	}
+
+	delay(10);
 }
