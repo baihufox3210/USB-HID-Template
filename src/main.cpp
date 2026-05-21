@@ -6,9 +6,12 @@
 #include <USBHIDGamepad.h>
 
 #include <BleGamepad.h>
+#include <NimBLEDevice.h>
 
 #define LED_PIN 48
 #define NUM_LEDS 1
+
+#define BLE_PIN_PASSWORD 123456
 
 enum Mode {MODE_USB, MODE_BLE};
 Mode currentMode = MODE_BLE;
@@ -25,7 +28,6 @@ struct Button {
 };
 
 Button buttons[] = {
-	{4, 1, HIGH}
 };
 
 void setButtonEvent(int buttonID, bool isPressed) {
@@ -61,6 +63,18 @@ void setup() {
 		FastLED.show();
 	}
 	else {
+		NimBLEDevice::init("ESP32 BLE Gamepad");
+
+		NimBLEDevice::setSecurityAuth(true, true, true);
+
+		NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
+		NimBLEDevice::setSecurityPasskey(BLE_PIN_PASSWORD);
+
+		NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
+		NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
+
+		NimBLEDevice::deleteAllBonds();
+		
 		bleGamepad.begin();
 
 		leds[0] = CRGB::Blue;
