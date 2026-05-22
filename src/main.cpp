@@ -14,7 +14,7 @@
 #define BLE_PIN_PASSWORD 123456
 
 enum Mode {MODE_USB, MODE_BLE};
-Mode currentMode = MODE_BLE;
+Mode currentMode;
 
 USBHIDGamepad usbGamepad;
 
@@ -55,14 +55,22 @@ void setup() {
 	leds[0] = CRGB::Red;
 	FastLED.show();
 
-	if(currentMode == MODE_USB) {
-		USB.begin();
-		usbGamepad.begin();
+	USB.begin();
+	usbGamepad.begin();
+
+	delay(1000);
+
+	if(USB) {
+		currentMode = MODE_USB;
 
 		leds[0] = CRGB::Green;
 		FastLED.show();
 	}
 	else {
+		currentMode = MODE_BLE;
+
+		usbGamepad.end();
+
 		NimBLEDevice::init("ESP32 BLE Gamepad");
 
 		NimBLEDevice::setSecurityAuth(true, true, true);
@@ -72,8 +80,6 @@ void setup() {
 
 		NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
 		NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
-
-		NimBLEDevice::deleteAllBonds();
 		
 		bleGamepad.begin();
 
