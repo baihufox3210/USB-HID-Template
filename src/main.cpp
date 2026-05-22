@@ -2,7 +2,7 @@
 
 #include "LEDController.h"
 
-#include "USBGamePad.h"
+#include "USB_GamePad.h"
 #include "BLE_GamePad.h"
 
 #define DEVICE_NAME "BLE GamePad"
@@ -27,6 +27,7 @@ struct Button {
 };
 
 Button buttons[] = {
+	{4, 1, HIGH}
 };
 
 void switchToUSBMode() {

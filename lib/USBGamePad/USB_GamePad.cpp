@@ -1,4 +1,4 @@
-#include "USBGamePad.h"
+#include "USB_GamePad.h"
 
 void USB_GamePad::begin() {
     USB.begin();
