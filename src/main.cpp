@@ -1,118 +1,94 @@
 #include <Arduino.h>
 
-#include <FastLED.h>
+#include "LEDController.h"
 
-#include <USB.h>
-#include <USBHIDGamepad.h>
+#include "USBGamePad.h"
+#include "BLE_GamePad.h"
 
-#include <BleGamepad.h>
-#include <NimBLEDevice.h>
-
-#define LED_PIN 48
-#define NUM_LEDS 1
+#define DEVICE_NAME "BLE GamePad"
+#define DEVICE_MANUFACTURER "Espressif"
+#define BETTERY_LEVEL 100
 
 #define BLE_PIN_PASSWORD 123456
 
-enum Mode {MODE_USB, MODE_BLE};
-Mode currentMode;
+enum Mode {USB_MODE, BLE_MODE, None};
 
-USBHIDGamepad usbGamepad;
+volatile Mode currentMode;
+Mode lastMode = None;
 
-BleGamepad bleGamepad("ESP32 BLE Gamepad", "Espressif", 100);
+LEDController ledController;
 
-CRGB leds[NUM_LEDS];
+USB_GamePad usbGamePad;
+Ble_GamePad bleGamepad(DEVICE_NAME, DEVICE_MANUFACTURER, BETTERY_LEVEL, BLE_PIN_PASSWORD);
 
 struct Button {
-	int pin, hid;
+	int pinID, hidID;
 	bool lastState;
 };
 
 Button buttons[] = {
 };
 
-void setButtonEvent(int buttonID, bool isPressed) {
-	if(currentMode == MODE_USB) {
-		if(isPressed) usbGamepad.pressButton(buttonID);
-		else usbGamepad.releaseButton(buttonID);
-	}
-	else {
-		if(isPressed) bleGamepad.press(buttonID);
-		else bleGamepad.release(buttonID);
-	}
+void switchToUSBMode() {
+	bleGamepad.stopAdvertising();
+	usbGamePad.start();
+}
+
+void switchToBleMode() {
+	bleGamepad.startAdvertising();
+	usbGamePad.stop();
+}
+
+void setButtonEvent(int hidID, bool isPressed) {
+	if(isPressed) currentMode == USB_MODE ? usbGamePad.press(hidID - 1) : bleGamepad.press(hidID);
+	else currentMode == USB_MODE ? usbGamePad.release(hidID - 1) : bleGamepad.release(hidID);
 }
 
 void setup() {
 	Serial.begin(115200);
 
 	for(Button& button : buttons) {
-		pinMode(button.pin, INPUT_PULLUP);
-		button.lastState = digitalRead(button.pin);
+		pinMode(button.pinID, INPUT_PULLUP);
+		button.lastState = digitalRead(button.pinID);
 	}
 
-	FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
-	FastLED.setBrightness(50);
+	ledController.begin(50);
 
-	leds[0] = CRGB::Red;
-	FastLED.show();
+	usbGamePad.begin();
+	bleGamepad.begin();
 
-	USB.begin();
-	usbGamepad.begin();
+	ledController.setColor(LEDColor::RED);
 
-	delay(1000);
+	delay(100);
 
-	if(USB) {
-		currentMode = MODE_USB;
-
-		leds[0] = CRGB::Green;
-		FastLED.show();
-	}
-	else {
-		currentMode = MODE_BLE;
-
-		usbGamepad.end();
-
-		NimBLEDevice::init("ESP32 BLE Gamepad");
-
-		NimBLEDevice::setSecurityAuth(true, true, true);
-
-		NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
-		NimBLEDevice::setSecurityPasskey(BLE_PIN_PASSWORD);
-
-		NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
-		NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
-		
-		bleGamepad.begin();
-
-		leds[0] = CRGB::Blue;
-		FastLED.show();
-	}
+	if(usbGamePad.isConnected()) currentMode = USB_MODE;
+	else currentMode = BLE_MODE;
 }
 
 void loop() {
-	if(currentMode == MODE_BLE) {
-		if(!bleGamepad.isConnected()) {
-			static unsigned long lastFlash = 0;
-			static bool flashState = false;
+	if(usbGamePad.isConnected()) currentMode = USB_MODE;
+	else currentMode = BLE_MODE;
 
-			if(millis() - lastFlash > 500) {
-				flashState = !flashState;
-				leds[0] = flashState ? CRGB::Blue : CRGB::Black;
-				
-				FastLED.show();
-				lastFlash = millis();
-			}
-		}
-		else {
-			leds[0] = CRGB::Blue;
-			FastLED.show();
-		}
+	if(currentMode != lastMode) {
+		if(currentMode == USB_MODE) switchToUSBMode();
+		else switchToBleMode();
+
+		lastMode = currentMode;
+	}
+
+	if(currentMode == BLE_MODE) {
+		if(!bleGamepad.isConnected()) ledController.flash(LEDColor::BLUE, 500);
+		else ledController.setColor(LEDColor::BLUE);
+	}
+	else {
+		ledController.setColor(LEDColor::GREEN);
 	}
 
 	for(Button& button : buttons) {
-		bool currentState = digitalRead(button.pin);
+		bool currentState = digitalRead(button.pinID);
 
 		if(currentState != button.lastState) {
-			setButtonEvent(button.hid, currentState == LOW);
+			setButtonEvent(button.hidID, currentState == LOW);
 			button.lastState = currentState;
 		}
 	}
