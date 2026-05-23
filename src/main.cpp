@@ -27,7 +27,6 @@ struct Button {
 };
 
 Button buttons[] = {
-	{4, 1, HIGH}
 };
 
 void switchToUSBMode() {
