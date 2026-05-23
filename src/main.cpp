@@ -61,9 +61,6 @@ void setup() {
 	ledController.setColor(LEDColor::RED);
 
 	delay(100);
-
-	if(usbGamePad.isConnected()) currentMode = USB_MODE;
-	else currentMode = BLE_MODE;
 }
 
 void loop() {
